@@ -1,0 +1,1187 @@
+# ============================================================================
+# Grafana — Avarion Governance Configuration (v2.0)
+# ============================================================================
+#
+# This file defines zone-based governance for AI-assisted development on the
+# Grafana codebase. Zones are the sole governance primitive — every file maps
+# to at most one zone (highest priority wins).
+#
+# Enforcement progression: observe → audit → enforce
+# Start in audit mode to collect baseline data before enforcing.
+# ============================================================================
+
+version: "2.0"
+enforcement_mode: audit
+
+# ============================================================================
+# DEFAULTS — inherited by all zones unless overridden
+# ============================================================================
+defaults:
+  ai_access: allowed
+  max_lines: 500
+  strictness: warn-only
+  observability:
+    tracing: true
+    logging: true
+    metrics: false
+    context_propagation: true
+
+# ============================================================================
+# COMMIT RULES — repo-wide commit hygiene
+# ============================================================================
+commit_rules:
+  message_pattern: "^(feat|fix|chore|refactor|docs|test|ci|perf|build|style)\\(.*\\):.*"
+  message_min_length: 15
+  require_ticket_reference: true
+  ticket_patterns:
+    - "#\\d+"
+    - "[A-Z]+-\\d+"
+  max_commit_lines_changed: 1500
+  forbidden_file_types:
+    - ".exe"
+    - ".env"
+    - ".pem"
+    - ".key"
+    - ".p12"
+    - ".pfx"
+  require_lockfile: true
+
+# ============================================================================
+# LICENSE POLICY — global dependency license governance
+# ============================================================================
+license_policy:
+  deny_copyleft: false
+  allowed:
+    - "Apache-2.0"
+    - "MIT"
+    - "BSD-2-Clause"
+    - "BSD-3-Clause"
+    - "ISC"
+    - "MPL-2.0"
+    - "AGPL-3.0-only"       # Grafana itself is AGPL
+    - "0BSD"
+    - "CC0-1.0"
+    - "Unlicense"
+  denied:
+    - "SSPL-1.0"
+    - "CC-BY-NC-4.0"
+    - "CC-BY-NC-SA-4.0"
+    - "Watcom-1.0"
+  warn_licenses:
+    - "GPL-2.0-only"
+    - "GPL-3.0-only"
+    - "LGPL-2.1-only"
+    - "LGPL-3.0-only"
+    - "CPAL-1.0"
+    - "EUPL-1.2"
+  per_license:
+    "AGPL-3.0-only": allow   # Grafana's own license
+    "SSPL-1.0": block
+
+# ============================================================================
+# REQUIRED VERDICTS — checks that must pass before merge
+# ============================================================================
+required_verdicts:
+  - check_type: "security.sast"
+    action: block
+  - check_type: "security.secret-scan"
+    action: block
+  - check_type: "quality.lint"
+    action: warn
+  - check_type: "quality.type-check"
+    action: warn
+  - check_type: "test.unit"
+    action: block
+  - check_type: "test.integration"
+    action: warn
+  - check_type: "compliance.license"
+    action: block
+
+# ============================================================================
+# ARCHITECTURAL LAYERS — import direction enforcement
+# ============================================================================
+layers:
+  - name: api-handlers
+    packages:
+      - "pkg/api/**"
+      - "pkg/middleware/**"
+    may_import:
+      - "services"
+      - "models"
+      - "infra"
+    must_not_import:
+      - "sqlstore"
+      - "tsdb"
+
+  - name: services
+    packages:
+      - "pkg/services/**"
+    may_import:
+      - "models"
+      - "infra"
+      - "storage"
+    must_not_import:
+      - "api-handlers"
+      - "cmd"
+
+  - name: tsdb
+    packages:
+      - "pkg/tsdb/**"
+    may_import:
+      - "infra"
+      - "models"
+    must_not_import:
+      - "api-handlers"
+      - "services"
+
+  - name: infra
+    packages:
+      - "pkg/infra/**"
+      - "pkg/util/**"
+    may_import: []
+    must_not_import:
+      - "api-handlers"
+      - "services"
+      - "tsdb"
+
+# ============================================================================
+# RULE OVERRIDES — per-rule enforcement with optional zone scoping
+# ============================================================================
+rule_overrides:
+  - rule: "ForbiddenSecretPatterns"
+    mode: enforce                          # Always enforce secret detection
+  - rule: "RequireTestForNewFiles"
+    mode: audit                            # Audit for now, enforce later
+    zones:
+      - "alerting-engine"
+      - "auth-core"
+      - "secrets-vault"
+  - rule: "CoverageMinimum"
+    mode: audit
+
+# ============================================================================
+# RULE ENFORCEMENT — per-category enforcement modes
+# ============================================================================
+rule_enforcement:
+  security: enforce
+  ai_governance: enforce
+  code_quality: audit
+  testing: audit
+  commit_hygiene: enforce
+  architecture: audit
+  dependencies: enforce
+  operational: audit
+  access_control: enforce
+
+# ============================================================================
+# ZONES — the sole governance primitive
+# ============================================================================
+# Priority guide:
+#   900+ = Critical infrastructure (hard-block / escalation-required)
+#   700-899 = Security-sensitive (ai-only-block / escalation-required)
+#   500-699 = Core business logic (warn-only / escalation-required)
+#   300-499 = Application code (warn-only)
+#   100-299 = Supporting code (warn-only)
+#   0-99 = Docs, tests, tooling (most permissive)
+# ============================================================================
+
+zones:
+
+  # --------------------------------------------------------------------------
+  # TIER 0: CRITICAL INFRASTRUCTURE — hard-block / escalation-required
+  # --------------------------------------------------------------------------
+
+  - id: secrets-vault
+    name: "Secrets & Encryption (Crown Jewel)"
+    priority: 950
+    patterns:
+      - "pkg/services/secrets/**"
+      - "pkg/services/encryption/**"
+      - "pkg/services/kmsproviders/**"
+      - "pkg/services/signingkeys/**"
+      - "apps/secret/**"
+      - "!**/*_test.go"
+    critical: true
+    strictness: hard-block
+    owners:
+      - "grafana-security-team"
+      - "platform-security-lead"
+    agents:
+      claude-code:
+        - read
+      copilot:
+        - read
+      cursor:
+        - read
+      devin: []                            # No access for autonomous agents
+    context_access: read_only
+    constraints:
+      ai_access: blocked
+      max_lines: 300
+      max_files: 3
+      coverage_minimum: 90.0
+      ai_coverage_minimum: 95.0
+      required_reviewers: 3
+      require_human_reviewer: true
+      max_severity: low
+      human_review:
+        required: true
+        min_duration_sec: 120
+        ttl_minutes: 15
+      intent:
+        required: true
+      require_mcp_consultation: true
+      observability:
+        tracing: true
+        logging: true
+        metrics: true
+        context_propagation: true
+      pattern_rules:
+        forbidden_patterns:
+          - "TODO:.*hack"
+          - "FIXME:.*workaround"
+          - "crypto/md5"
+          - "crypto/sha1"
+          - "math/rand[^/]"               # Must use crypto/rand
+        forbidden_imports:
+          - "crypto/md5"
+          - "crypto/sha1"
+          - "math/rand"
+          - "net/http"                     # Must use internal HTTP client
+        require_error_wrapping: true
+        forbid_panic: true
+        max_package_fan_out: 8
+      security_rules:
+        secret_patterns:
+          - "AKIA[0-9A-Z]{16}"
+          - "ghp_[A-Za-z0-9_]{36}"
+          - "glsa_[A-Za-z0-9_]{32}"        # Grafana service account tokens
+          - "eyJr[A-Za-z0-9_-]{40,}"       # JWT tokens
+          - "-----BEGIN (RSA |EC )?PRIVATE KEY-----"
+          - "password\\s*[:=]\\s*[\"'][^\"']{8,}"
+        forbid_raw_sql: true
+        forbidden_network_calls:
+          - "http.DefaultClient"
+          - "http.DefaultTransport"
+      testing_rules:
+        require_test_for_new_files: true
+        min_test_ratio: 0.8
+        require_test_on_critical_change: true
+      ai_rules:
+        max_ai_lines_per_commit: 25
+        max_ai_ratio: 0.1
+        require_ai_annotation: true
+      required_check_types:
+        - check_type: "security.sast"
+          action: block
+        - check_type: "security.secret-scan"
+          action: block
+    commit_policy:
+      require_signed_commit: true
+      require_code_review: true
+      require_tests: true
+      max_file_size: 524288
+
+  - id: auth-core
+    name: "Authentication & Authorization (Crown Jewel)"
+    priority: 940
+    patterns:
+      - "pkg/services/auth/**"
+      - "pkg/services/authn/**"
+      - "pkg/services/authz/**"
+      - "pkg/services/authapi/**"
+      - "pkg/services/accesscontrol/**"
+      - "pkg/services/oauthtoken/**"
+      - "pkg/services/login/**"
+      - "pkg/services/loginattempt/**"
+      - "pkg/services/ldap/**"
+      - "pkg/services/ssosettings/**"
+      - "pkg/services/extsvcauth/**"
+      - "pkg/services/anonymous/**"
+      - "pkg/login/**"
+      - "pkg/clientauth/**"
+      - "apps/iam/**"
+      - "!**/*_test.go"
+    critical: true
+    strictness: escalation-required
+    owners:
+      - "grafana-identity-team"
+      - "platform-security-lead"
+    agents:
+      claude-code:
+        - read
+        - test
+      copilot:
+        - read
+      cursor:
+        - read
+      devin: []
+    context_access: read_only
+    constraints:
+      ai_access: review
+      max_lines: 350
+      max_files: 5
+      coverage_minimum: 85.0
+      ai_coverage_minimum: 95.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      max_severity: low
+      human_review:
+        required: true
+        min_duration_sec: 90
+        ttl_minutes: 20
+      intent:
+        required: true
+      require_mcp_consultation: true
+      pattern_rules:
+        forbidden_patterns:
+          - "TODO:.*hack"
+          - "FIXME:.*security"
+          - "nosec"
+        forbidden_imports:
+          - "crypto/md5"
+          - "crypto/sha1"
+          - "math/rand"
+        require_error_wrapping: true
+        forbid_panic: true
+        forbidden_cross_zone_imports:
+          - "alerting-engine"
+          - "dashboard-core"
+      security_rules:
+        secret_patterns:
+          - "AKIA[0-9A-Z]{16}"
+          - "password\\s*[:=]\\s*[\"'][^\"']{8,}"
+        forbid_raw_sql: true
+      testing_rules:
+        require_test_for_new_files: true
+        min_test_ratio: 0.6
+        require_test_on_critical_change: true
+      ai_rules:
+        max_ai_lines_per_commit: 50
+        max_ai_ratio: 0.2
+        require_ai_annotation: true
+
+  - id: api-keys
+    name: "API Keys & Service Accounts"
+    priority: 920
+    patterns:
+      - "pkg/services/apikey/**"
+      - "pkg/services/serviceaccounts/**"
+      - "!**/*_test.go"
+    critical: true
+    strictness: escalation-required
+    owners:
+      - "grafana-identity-team"
+    agents:
+      claude-code:
+        - read
+        - test
+      copilot:
+        - read
+      cursor:
+        - read
+    context_access: read_only
+    constraints:
+      ai_access: review
+      max_lines: 300
+      coverage_minimum: 85.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      human_review:
+        required: true
+        min_duration_sec: 60
+      security_rules:
+        secret_patterns:
+          - "AKIA[0-9A-Z]{16}"
+          - "glsa_[A-Za-z0-9_]{32}"
+        forbid_raw_sql: true
+
+  # --------------------------------------------------------------------------
+  # TIER 1: SECURITY-SENSITIVE — escalation-required / ai-only-block
+  # --------------------------------------------------------------------------
+
+  - id: server-bootstrap
+    name: "Server Bootstrap & Configuration"
+    priority: 850
+    patterns:
+      - "pkg/server/**"
+      - "pkg/cmd/**"
+      - "pkg/setting/**"
+      - "pkg/services/setting/**"
+      - "conf/defaults.ini"
+      - "conf/sample.ini"
+      - "!**/*_test.go"
+    critical: true
+    strictness: ai-only-block
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+      copilot:
+        - read
+      cursor:
+        - read
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 75.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      intent:
+        required: true
+      pattern_rules:
+        forbid_panic: true
+        require_error_wrapping: true
+      operational_rules:
+        require_graceful_shutdown: true
+        require_health_check: true
+
+  - id: database-layer
+    name: "Database & SQL Store"
+    priority: 840
+    patterns:
+      - "pkg/services/sqlstore/**"
+      - "pkg/storage/**"
+      - "pkg/services/store/**"
+      - "!**/*_test.go"
+    critical: true
+    strictness: escalation-required
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+        - test
+      copilot:
+        - read
+      cursor:
+        - read
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 80.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      pattern_rules:
+        forbid_panic: true
+        require_error_wrapping: true
+        forbidden_patterns:
+          - "fmt\\.Sprintf.*SELECT"         # Prevent SQL injection
+          - "fmt\\.Sprintf.*INSERT"
+          - "fmt\\.Sprintf.*UPDATE"
+          - "fmt\\.Sprintf.*DELETE"
+      security_rules:
+        forbid_raw_sql: false              # SQL store needs raw SQL, but parameterized
+      testing_rules:
+        require_test_for_new_files: true
+        require_migration_down: true
+
+  - id: middleware-security
+    name: "HTTP Middleware & Security"
+    priority: 830
+    patterns:
+      - "pkg/middleware/**"
+      - "pkg/web/**"
+      - "pkg/services/contexthandler/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: escalation-required
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 350
+      coverage_minimum: 80.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      pattern_rules:
+        forbid_panic: true
+        require_error_wrapping: true
+        forbidden_patterns:
+          - "http\\.DefaultClient"
+          - "http\\.DefaultTransport"
+      operational_rules:
+        require_timeout: true
+
+  - id: plugin-system
+    name: "Plugin System & Sandboxing"
+    priority: 810
+    patterns:
+      - "pkg/plugins/**"
+      - "pkg/services/pluginsintegration/**"
+      - "pkg/services/plugindashboards/**"
+      - "apps/plugins/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: escalation-required
+    owners:
+      - "grafana-plugins-platform"
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 75.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      pattern_rules:
+        forbid_panic: true
+        forbidden_patterns:
+          - "os\\.Exec"
+          - "exec\\.Command"               # Plugins should use SDK, not shell
+          - "unsafe\\."
+
+  # --------------------------------------------------------------------------
+  # TIER 2: CORE BUSINESS LOGIC — warn-only / escalation-required
+  # --------------------------------------------------------------------------
+
+  - id: alerting-engine
+    name: "Alerting Engine (Crown Jewel)"
+    priority: 700
+    patterns:
+      - "pkg/services/ngalert/**"
+      - "apps/alerting/**"
+      - "!**/*_test.go"
+    critical: true
+    strictness: escalation-required
+    owners:
+      - "grafana-alerting-squad"
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+      cursor:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 80.0
+      ai_coverage_minimum: 90.0
+      required_reviewers: 2
+      require_human_reviewer: true
+      intent:
+        required: true
+      observability:
+        tracing: true
+        logging: true
+        metrics: true
+        context_propagation: true
+      pattern_rules:
+        forbid_panic: true
+        require_error_wrapping: true
+        forbidden_cross_zone_imports:
+          - "secrets-vault"
+          - "dashboard-core"
+      testing_rules:
+        require_test_for_new_files: true
+        require_test_on_critical_change: true
+      operational_rules:
+        require_timeout: true
+        require_retry_policy: true
+      ai_rules:
+        max_ai_lines_per_commit: 75
+        max_ai_ratio: 0.25
+        require_ai_annotation: true
+
+  - id: dashboard-core
+    name: "Dashboard Service"
+    priority: 680
+    patterns:
+      - "pkg/services/dashboards/**"
+      - "pkg/services/dashboardversion/**"
+      - "pkg/services/dashboardsnapshots/**"
+      - "pkg/services/dashboardimport/**"
+      - "apps/dashboard/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: escalation-required
+    owners:
+      - "grafana-dashboards-squad"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - read
+        - create
+        - modify
+      cursor:
+        - read
+        - create
+        - modify
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 70.0
+      required_reviewers: 2
+      pattern_rules:
+        require_error_wrapping: true
+      testing_rules:
+        require_test_for_new_files: true
+
+  - id: datasource-proxy
+    name: "Data Source Proxy & Queries"
+    priority: 660
+    patterns:
+      - "pkg/services/datasourceproxy/**"
+      - "pkg/services/datasources/**"
+      - "pkg/services/dsquerierclient/**"
+      - "pkg/services/query/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: escalation-required
+    owners:
+      - "grafana-datasources-squad"
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 75.0
+      required_reviewers: 2
+      pattern_rules:
+        forbid_panic: true
+        require_error_wrapping: true
+        forbidden_patterns:
+          - "http\\.DefaultClient"
+      security_rules:
+        forbidden_network_calls:
+          - "http.DefaultClient"
+          - "http.DefaultTransport"
+      operational_rules:
+        require_timeout: true
+        require_retry_policy: true
+
+  - id: tsdb-engine
+    name: "TSDB & Expression Engine"
+    priority: 640
+    patterns:
+      - "pkg/tsdb/**"
+      - "pkg/expr/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    owners:
+      - "grafana-datasources-squad"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 70.0
+      pattern_rules:
+        require_error_wrapping: true
+      operational_rules:
+        require_timeout: true
+
+  - id: live-streaming
+    name: "Live & Real-time Streaming"
+    priority: 620
+    patterns:
+      - "pkg/services/live/**"
+      - "apps/live/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 65.0
+      operational_rules:
+        require_timeout: true
+        require_graceful_shutdown: true
+
+  - id: provisioning
+    name: "Provisioning & Cloud Migration"
+    priority: 600
+    patterns:
+      - "pkg/services/provisioning/**"
+      - "pkg/services/cloudmigration/**"
+      - "apps/provisioning/**"
+      - "conf/provisioning/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 65.0
+      pattern_rules:
+        require_error_wrapping: true
+
+  # --------------------------------------------------------------------------
+  # TIER 3: APPLICATION CODE — warn-only
+  # --------------------------------------------------------------------------
+
+  - id: api-handlers
+    name: "REST API Handlers"
+    priority: 500
+    patterns:
+      - "pkg/api/**"
+      - "pkg/apiserver/**"
+      - "pkg/apimachinery/**"
+      - "pkg/apis/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    owners:
+      - "grafana-backend-platform"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 65.0
+      pattern_rules:
+        require_error_wrapping: true
+        forbidden_imports:
+          - "pkg/services/sqlstore"        # Handlers must not import store directly
+      testing_rules:
+        require_test_for_new_files: true
+
+  - id: notifications
+    name: "Notifications & Rendering"
+    priority: 480
+    patterns:
+      - "pkg/services/notifications/**"
+      - "pkg/services/rendering/**"
+      - "pkg/services/screenshot/**"
+      - "emails/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 60.0
+
+  - id: user-management
+    name: "Users, Orgs, Teams & Preferences"
+    priority: 460
+    patterns:
+      - "pkg/services/user/**"
+      - "pkg/services/org/**"
+      - "pkg/services/team/**"
+      - "pkg/services/preference/**"
+      - "pkg/services/temp_user/**"
+      - "pkg/services/searchusers/**"
+      - "pkg/services/scimutil/**"
+      - "apps/preferences/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 65.0
+      pattern_rules:
+        require_error_wrapping: true
+
+  - id: annotations-correlations
+    name: "Annotations, Correlations & Tags"
+    priority: 440
+    patterns:
+      - "pkg/services/annotations/**"
+      - "pkg/services/correlations/**"
+      - "pkg/services/tag/**"
+      - "pkg/services/star/**"
+      - "apps/annotation/**"
+      - "apps/correlations/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 60.0
+
+  - id: library-elements
+    name: "Library Elements & Panels"
+    priority: 420
+    patterns:
+      - "pkg/services/libraryelements/**"
+      - "pkg/services/librarypanels/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 60.0
+
+  - id: misc-services
+    name: "Miscellaneous Backend Services"
+    priority: 400
+    patterns:
+      - "pkg/services/cleanup/**"
+      - "pkg/services/hooks/**"
+      - "pkg/services/navtree/**"
+      - "pkg/services/quota/**"
+      - "pkg/services/queryhistory/**"
+      - "pkg/services/shorturls/**"
+      - "pkg/services/stats/**"
+      - "pkg/services/supportbundles/**"
+      - "pkg/services/caching/**"
+      - "pkg/services/featuremgmt/**"
+      - "pkg/services/licensing/**"
+      - "pkg/services/publicdashboards/**"
+      - "pkg/services/validations/**"
+      - "pkg/services/updatemanager/**"
+      - "pkg/services/search/**"
+      - "pkg/services/folder/**"
+      - "pkg/services/front*/**"
+      - "apps/collections/**"
+      - "apps/folder/**"
+      - "apps/quotas/**"
+      - "apps/scope/**"
+      - "apps/shorturl/**"
+      - "apps/playlist/**"
+      - "apps/dashvalidator/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 500
+      coverage_minimum: 55.0
+
+  # --------------------------------------------------------------------------
+  # TIER 3: FRONTEND — separate governance for TypeScript/React
+  # --------------------------------------------------------------------------
+
+  - id: frontend-core
+    name: "Frontend Core & Routing"
+    priority: 500
+    patterns:
+      - "public/app/core/**"
+      - "public/app/routes/**"
+      - "public/app/store/**"
+      - "public/app/types/**"
+      - "!**/*.test.*"
+      - "!**/__mocks__/**"
+    critical: false
+    strictness: warn-only
+    owners:
+      - "grafana-frontend-platform"
+    agents:
+      claude-code:
+        - read
+        - create
+        - modify
+        - test
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 60.0
+      max_bundle_size_kb: 500
+      pattern_rules:
+        forbidden_patterns:
+          - "console\\.log\\("
+          - "debugger;"
+          - "any as any"
+        forbidden_imports:
+          - "lodash"                       # Use lodash/specific imports
+      ai_rules:
+        max_ai_lines_per_commit: 150
+        max_ai_ratio: 0.4
+
+  - id: frontend-features
+    name: "Frontend Feature Modules"
+    priority: 450
+    patterns:
+      - "public/app/features/**"
+      - "public/app/plugins/**"
+      - "public/app/api/**"
+      - "!**/*.test.*"
+      - "!**/__mocks__/**"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 50.0
+      max_bundle_size_kb: 750
+      pattern_rules:
+        forbidden_patterns:
+          - "console\\.log\\("
+          - "debugger;"
+
+  - id: frontend-extensions
+    name: "Frontend Enterprise Extensions"
+    priority: 440
+    patterns:
+      - "public/app/extensions/**"
+      - "!**/*.test.*"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 400
+      coverage_minimum: 55.0
+
+  # --------------------------------------------------------------------------
+  # TIER 4: INFRASTRUCTURE & TOOLING — warn-only (most permissive)
+  # --------------------------------------------------------------------------
+
+  - id: infra-libraries
+    name: "Infrastructure Libraries"
+    priority: 300
+    patterns:
+      - "pkg/infra/**"
+      - "pkg/util/**"
+      - "pkg/bus/**"
+      - "pkg/events/**"
+      - "pkg/registry/**"
+      - "pkg/components/**"
+      - "pkg/ifaces/**"
+      - "pkg/semconv/**"
+      - "pkg/modules/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 400
+      coverage_minimum: 55.0
+
+  - id: codegen-build
+    name: "Code Generation & Build"
+    priority: 200
+    patterns:
+      - "pkg/codegen/**"
+      - "pkg/generated/**"
+      - "pkg/kinds/**"
+      - "pkg/build/**"
+      - "cue.mod/**"
+      - "!**/*_test.go"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 500
+
+  - id: ci-docker
+    name: "CI/CD, Docker & DevEnv"
+    priority: 180
+    patterns:
+      - "Dockerfile"
+      - "Makefile"
+      - ".github/**"
+      - "devenv/**"
+      - "scripts/**"
+      - "contribute/**"
+      - "crowdin.yml"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - read
+        - modify
+        - test
+      copilot:
+        - read
+        - modify
+    constraints:
+      ai_access: review
+      max_lines: 400
+      pattern_rules:
+        forbidden_patterns:
+          - "curl.*\\| bash"               # No pipe-to-bash
+          - "wget.*\\| sh"
+
+  # --------------------------------------------------------------------------
+  # TIER 5: TESTS & DOCS — most permissive (AI-friendly)
+  # --------------------------------------------------------------------------
+
+  - id: test-files
+    name: "Test Files (All Languages)"
+    priority: 50
+    patterns:
+      - "**/*_test.go"
+      - "**/*.test.ts"
+      - "**/*.test.tsx"
+      - "**/*.test.js"
+      - "**/*.spec.ts"
+      - "**/*.spec.tsx"
+      - "**/__mocks__/**"
+      - "pkg/tests/**"
+      - "pkg/mocks/**"
+      - "e2e/**"
+      - "e2e-playwright/**"
+      - "public/test/**"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+      devin:
+        - read
+        - create
+        - modify
+    constraints:
+      ai_access: allowed
+      max_lines: 600
+      ai_rules:
+        max_ai_lines_per_commit: 300
+        max_ai_ratio: 0.8
+      pattern_rules:
+        forbid_test_skip: false            # Tests may skip conditionally
+
+  - id: documentation
+    name: "Documentation & Static Assets"
+    priority: 10
+    patterns:
+      - "docs/**"
+      - "**/*.md"
+      - "CHANGELOG.md"
+      - "LICENSE"
+      - "NOTICE.md"
+      - "public/img/**"
+      - "public/fonts/**"
+      - "public/locales/**"
+      - "emails/**/*.html"
+    critical: false
+    strictness: warn-only
+    agents:
+      claude-code:
+        - "*"
+      copilot:
+        - "*"
+      cursor:
+        - "*"
+      devin:
+        - "*"
+    constraints:
+      ai_access: allowed
+      max_lines: 1000
+      ai_rules:
+        max_ai_lines_per_commit: 500
+        max_ai_ratio: 0.9

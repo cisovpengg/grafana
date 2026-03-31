@@ -1,0 +1,19 @@
+{
+  "mcpServers": {
+    "avarion": {
+      "headers": {
+        "Authorization": "Bearer fz_live_ac9b29b892d01f7c4a95064a01224b74",
+        "X-Avarion-Repo-ID": "a12d402e-1574-43f2-b3c9-db873ffc2c85"
+      },
+      "type": "http",
+      "url": "http://localhost:8080/v1/mcp"
+    },
+    "avarion-local": {
+      "args": [
+        "mcp",
+        "serve"
+      ],
+      "command": "./avarion-hook"
+    }
+  }
+}
