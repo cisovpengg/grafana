@@ -31,17 +31,17 @@ require (
 	github.com/andybalholm/brotli v1.2.0 // @grafana/partner-datasources
 	github.com/apache/arrow-go/v18 v18.5.1 // @grafana/plugins-platform-backend
 	github.com/armon/go-radix v1.0.0 // @grafana/grafana-app-platform-squad
-	github.com/aws/aws-sdk-go v1.55.7 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2 v1.41.1 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/credentials v1.19.7 // @grafana/grafana-operator-experience-squad
-	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.45.3 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.51.0 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/service/ec2 v1.225.2 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/service/oam v1.18.3 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.26.6 // @grafana/aws-datasources
-	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.40.1 // @grafana/grafana-operator-experience-squad
-	github.com/aws/aws-sdk-go-v2/service/sts v1.41.6 // @grafana/grafana-operator-experience-squad
-	github.com/aws/smithy-go v1.24.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go v1.55.8 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2 v1.43.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/credentials v1.19.30 // @grafana/grafana-operator-experience-squad
+	github.com/aws/aws-sdk-go-v2/service/cloudwatch v1.65.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/service/cloudwatchlogs v1.80.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/service/ec2 v1.317.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/service/oam v1.26.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/service/resourcegroupstaggingapi v1.35.0 // @grafana/aws-datasources
+	github.com/aws/aws-sdk-go-v2/service/secretsmanager v1.44.0 // @grafana/grafana-operator-experience-squad
+	github.com/aws/aws-sdk-go-v2/service/sts v1.45.0 // @grafana/grafana-operator-experience-squad
+	github.com/aws/smithy-go v1.27.3 // @grafana/aws-datasources
 	github.com/beevik/etree v1.6.0 // @grafana/grafana-backend-group
 	github.com/benbjohnson/clock v1.3.5 // @grafana/alerting-backend
 	github.com/blang/semver/v4 v4.0.0 // indirect; @grafana/grafana-developer-enablement-squad
@@ -53,7 +53,7 @@ require (
 	github.com/crewjam/saml v0.4.14 // @grafana/identity-access-team
 	github.com/dgraph-io/badger/v4 v4.9.1 // @grafana/grafana-search-and-storage
 	github.com/dlmiddlecote/sqlstats v1.0.2 // @grafana/grafana-backend-group
-	github.com/docker/go-connections v0.6.0 // @grafana/grafana-app-platform-squad
+	github.com/docker/go-connections v0.6.0 // indirect; @grafana/grafana-app-platform-squad
 	github.com/dolthub/go-mysql-server v0.19.1-0.20250410182021-5632d67cd46e // @grafana/grafana-datasources-core-services
 	github.com/dolthub/vitess v0.0.0-20260225173707-20566e4abe9e // @grafana/grafana-datasources-core-services
 	github.com/dustin/go-humanize v1.0.1 // @grafana/observability-traces-and-profiling
@@ -173,7 +173,7 @@ require (
 	github.com/spf13/pflag v1.0.10 // @grafana-app-platform-squad
 	github.com/spyzhov/ajson v0.9.6 // @grafana/grafana-sharing-squad
 	github.com/stretchr/testify v1.11.1 // @grafana/grafana-backend-group
-	github.com/testcontainers/testcontainers-go v0.40.0 //@grafana/grafana-app-platform-squad
+	github.com/testcontainers/testcontainers-go v0.40.0 // indirect; @grafana/grafana-app-platform-squad
 	github.com/thomaspoignant/go-feature-flag v1.42.0 // @grafana/grafana-backend-group
 	github.com/tjhop/slog-gokit v0.1.6 // @grafana/grafana-app-platform-squad
 	github.com/ua-parser/uap-go v0.0.0-20250213224047-9c035f085b90 // @grafana/grafana-backend-group
@@ -235,7 +235,7 @@ require (
 	k8s.io/utils v0.0.0-20251002143259-bc988d571ff4 // @grafana/partner-datasources
 	modernc.org/sqlite v1.47.0 // @grafana/grafana-backend-group
 	pgregory.net/rapid v1.2.0 // @grafana/grafana-operator-experience-squad
-	sigs.k8s.io/randfill v1.0.0 // @grafana/grafana-app-platform-squad
+	sigs.k8s.io/randfill v1.0.0 // indirect; @grafana/grafana-app-platform-squad
 	sigs.k8s.io/structured-merge-diff/v6 v6.3.2 // @grafana/grafana-app-platform-squad
 	xorm.io/builder v0.3.13 // @grafana/grafana-backend-group
 )
@@ -359,23 +359,23 @@ require (
 	github.com/apparentlymart/go-textseg/v15 v15.0.0 // indirect
 	github.com/armon/go-metrics v0.4.1 // indirect
 	github.com/at-wat/mqtt-go v0.19.6 // indirect
-	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.3 // indirect
+	github.com/aws/aws-sdk-go-v2/aws/protocol/eventstream v1.7.14 // indirect
 	github.com/aws/aws-sdk-go-v2/config v1.32.7 // indirect
-	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.17 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.18.31 // indirect
 	github.com/aws/aws-sdk-go-v2/feature/s3/manager v1.20.3 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.17 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.17 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.4.31 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.7.31 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
-	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.13 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.32 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.4 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.17 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.31 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.13 // indirect
 	github.com/aws/aws-sdk-go-v2/service/kms v1.41.2 // indirect
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.89.2 // indirect
-	github.com/aws/aws-sdk-go-v2/service/signin v1.0.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/sso v1.30.9 // indirect
-	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.13 // indirect
+	github.com/aws/aws-sdk-go-v2/service/signin v1.5.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.33.0 // indirect
+	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.38.0 // indirect
 	github.com/bahlo/generic-list-go v0.2.0 // indirect
 	github.com/barkimedes/go-deepcopy v0.0.0-20220514131651-17c30cfc62df // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
